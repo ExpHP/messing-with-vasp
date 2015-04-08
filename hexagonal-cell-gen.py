@@ -11,6 +11,8 @@ from workspace_maker import VaspWorkspaceMaker
 # TODO figure out what this actually is
 CARBON_SEP_ANGSTROMS = 1.42
 
+# TODO POTCAR files must be gathered from vasp
+
 class MyWorkspaceMaker(VaspWorkspaceMaker):
 	# atomic_separation:  Distance between any two adjacent atoms in the lattice
 	def __init__ (self, title, atomic_separation, dynamics = (False, False, False)):
@@ -39,7 +41,7 @@ class MyWorkspaceMaker(VaspWorkspaceMaker):
 		f.write(' {:d}\n'.format(len(particles)))
 
 		f.write('Selective dynamics\n')
-		f.write('Cartesian\n')
+		f.write('Direct\n')
 
 		# positions of atoms
 		for pos in particles:
