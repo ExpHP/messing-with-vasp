@@ -50,6 +50,10 @@ class VaspWorkspaceMaker:
 
 		validate_dir_exists(head)
 
+		# TODO This is intended as a solution to the issue of overwriting good files with incomplete,
+		#      corrupt files (due to an error in execution).
+		#  A better (and less annoying) solution is to build files in a temporary directory and copy
+		#    them over at the end.
 		if os.path.exists(workspace_path):
 			raise RuntimeError("'{}' already exists".format(workspace_path))
 
