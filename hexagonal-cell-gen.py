@@ -7,6 +7,7 @@
 import math
 import sys
 from workspace_maker import VaspWorkspaceMaker
+from workspace_maker import write_composite_potcar
 
 # TODO figure out what this actually is
 CARBON_SEP_ANGSTROMS = 1.42
@@ -67,7 +68,7 @@ class MyWorkspaceMaker(VaspWorkspaceMaker):
 		f.write('ISMEAR = 0\n') # gaussian smearing (of partial occupancies)
 
 	def write_potcar (self, f):
-		pass
+		write_composite_potcar(f, ['C'])
 
 	def write_kpoints (self, f):
 		f.write("hi i'm kpoints\n")

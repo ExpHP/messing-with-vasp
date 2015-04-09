@@ -5,6 +5,20 @@
 
 import os
 
+# TODO: Wrap the use of environment vars in a more future-friendly config-providing class or module
+
+def validate_file_exists (path, msg=''):
+	if not os.path.exists(path):
+		raise RuntimeError('"{}" does not exist. '.format(path) + msg)
+	if not os.path.isfile(path):
+		raise RuntimeError('"{}" is not a file. '.format(path) + msg)
+
+def validate_dir_exists (path, msg=''):
+	if not os.path.exists(path):
+		raise RuntimeError('"{}" does not exist. '.format(path) + msg)
+	if not os.path.isdir(path):
+		raise RuntimeError('"{}" is not a directory. '.format(path) + msg)
+
 # Abstract base class for creating a VASP workspace, to eliminate any boring
 #  filesystem-related copy pasta.
 class VaspWorkspaceMaker:
@@ -34,10 +48,8 @@ class VaspWorkspaceMaker:
 	def _validate_destination (self, workspace_path):
 		head,tail = os.path.split(workspace_path)
 
-		if not os.path.exists(head):
-			raise RuntimeError("directory '{}' does not exist".format(head))
-		if not os.path.isdir(head):
-			raise RuntimeError("'{}' is not a directory".format(head))
+		validate_dir_exists(head)
+
 		if os.path.exists(workspace_path):
 			raise RuntimeError("'{}' already exists".format(workspace_path))
 
@@ -59,4 +71,38 @@ class VaspWorkspaceMaker:
 	def _open_output_file (self, workspace, fname):
 		return open(os.path.join(workspace, fname), 'w')
 
+
+#--------------------------------------------------------
+
+#--------------------------------------------------------
+# TODO: This static code really shouldn't be in this file as its presence makes the
+#       abstract base class implicitly dependent on the implementation
+#       (the ABC cannot be imported if the locpot path doesn't exist)
+ENV_POTCAR_DIR = 'VASP_POTCAR_DIR'
+
+MSG_BAD_POTCAR_DIR = "Please link this path (or set the environment variable {}) to point to Vasp's potentials/potcar directory".format(ENV_POTCAR_DIR)
+
+POTCAR_DIR = os.environ.get(ENV_POTCAR_DIR)
+if POTCAR_DIR is None:
+	POTCAR_DIR = os.path.join(os.getcwd(), 'locpot') # default setting
+
+validate_dir_exists(POTCAR_DIR, MSG_BAD_POTCAR_DIR)
+
+#--------------------------------------------------------
+# Helper methods which partially implement writing the files
+
+def write_composite_potcar(f, names_iter):
+	for name in names_iter:
+		write_vasp_builtin_potcar(f, name)
+
+# Writes the contents of a vasp builtin potcar file into the provided
+#  output file handle
+def write_vasp_builtin_potcar(fout, name):
+	src_potcar_path = os.path.join(POTCAR_DIR, name, 'POTCAR')
+
+	validate_file_exists(src_potcar_path)
+	with open(src_potcar_path) as fin:
+		s = fin.read()
+
+	fout.write(s)
 
