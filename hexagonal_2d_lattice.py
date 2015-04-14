@@ -51,11 +51,22 @@ def make_hex_lattice_input(path, atomic_sep):
 	symbols = ['C', 'C']
 	unique_symbols = set(symbols) # for potcar
 
-	lattice = atomic_sep * np.array([
+
+	# lampam (old)
+	lattice_lamp = atomic_sep * np.array([
 		[3.0,            0.0,  0.],
 		[1.5, math.sqrt(3)/2,  0.],
 		[0.0,            0.0, 20.],
 	])
+
+	# liangbo
+	lattice_liang = atomic_sep * np.array([
+		[math.sqrt(3),    0.0,  0.],
+		[-math.sqrt(3)/2, 1.5,  0.],
+		[0.0,             0.0, 20.],
+	])
+
+	lattice = lattice_liang
 
 	positions = [
 		[0.0, 0.0, 1/2],
@@ -73,9 +84,10 @@ def make_hex_lattice_input(path, atomic_sep):
 
 	incar = Incar()
 	incar['SYSTEM'] = 'Hexagonal Lattice, r={:0.3f}'.format(atomic_sep)
-	incar['ALGO']   = 'F'
+	incar['ALGO']   = 'Fast'
 	incar['NSW']  = 1000
 	incar['IBRION']  = 2
+	incar['EDIFF']  = 1E-8
 	# NOTE ENCUT is in Incar.int_keys while vasp docs specify "Real"
 
 	kpoints = Kpoints.gamma_automatic([9,9,1], [0,0,0])
