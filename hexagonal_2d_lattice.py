@@ -35,7 +35,7 @@ for d in {}*; do
    cd $d
    if [ ! -e finished ]; then
      echo "Start cell optimization calculation for $d"
-     srun --mpi=none vasp
+     srun --mpi=none vasp 1>stdout 2>stderr
      touch finished
    else
      echo "Nothing to do for $d"
@@ -74,7 +74,8 @@ def make_hex_lattice_input(path, atomic_sep):
 	incar = Incar()
 	incar['SYSTEM'] = 'Hexagonal Lattice, r={:0.3f}'.format(atomic_sep)
 	incar['ALGO']   = 'F'
-	incar['ENCUT']  = 250.0
+	incar['NSW']  = 1000
+	incar['IBRION']  = 2
 	# NOTE ENCUT is in Incar.int_keys while vasp docs specify "Real"
 
 	kpoints = Kpoints.gamma_automatic([9,9,1], [0,0,0])
