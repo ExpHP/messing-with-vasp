@@ -19,10 +19,10 @@ from pymatgen.io.vaspio import Potcar, Incar, Kpoints, Poscar, VaspInput
 #       enough to figure it out!
 
 VASP_INPUT_PREFIX = 'vi_'
-SCRIPT_NAME = 'run-all.sh'
+SCRIPT_NAME = 'sbatch.me'
 SCRIPT_CONTENTS = '''#!/bin/bash
-#SBATCH -n 64
-#SBATCH -N 4
+#SBATCH -n 16
+#SBATCH -N 1
 #SBATCH -o out.%j
 #SBATCH -J vasp-single
 echo "The Job ID is $SLURM_JOB_ID"
@@ -35,7 +35,7 @@ for d in {}*; do
    cd $d
    if [ ! -e finished ]; then
      echo "Start cell optimization calculation for $d"
-     vasp
+     srun --mpi=none vasp
      touch finished
    else
      echo "Nothing to do for $d"
@@ -88,8 +88,8 @@ def make_hex_lattice_input(path, atomic_sep):
 
 def make_test_dir(path):
 
-	for scale in range(138,145):
-		atomic_sep = scale * .01
+	for scale in range(1380,1450):
+		atomic_sep = scale * .001
 
 		input_dir = os.path.join(path, '{}hexagonal-{:0.3f}'.format(VASP_INPUT_PREFIX, atomic_sep))
 
