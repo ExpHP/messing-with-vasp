@@ -41,9 +41,9 @@ for d in {}*; do
      echo "Nothing to do for $d"
    fi
 )
+done
 touch finished
 echo "All jobs done"
-done
 '''.format(VASP_INPUT_PREFIX)
 
 
