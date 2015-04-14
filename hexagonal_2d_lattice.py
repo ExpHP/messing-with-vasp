@@ -1,5 +1,9 @@
 
+from __future__ import division
+
 import math
+import sys
+import os
 
 import numpy as np
 import pymatgen as mg
@@ -14,6 +18,35 @@ from pymatgen.io.vaspio import Potcar, Incar, Kpoints, Poscar, VaspInput
 #       are listed in the POSCAR, I better make certain that VASP is smart
 #       enough to figure it out!
 
+VASP_INPUT_PREFIX = 'vi_'
+SCRIPT_NAME = 'run-all.sh'
+SCRIPT_CONTENTS = '''#!/bin/bash
+#SBATCH -n 64
+#SBATCH -N 4
+#SBATCH -o out.%j
+#SBATCH -J vasp-single
+echo "The Job ID is $SLURM_JOB_ID"
+
+source /cm/shared/apps/intel/bin/compilervars.sh intel64
+export PATH=/cm/shared/apps/mvapich2/intel/64/1.9/bin:$PATH
+
+for d in {}*; do
+(
+   cd $d
+   if [ ! -e finished ]; then
+     echo "Start cell optimization calculation for $d"
+     vasp
+     touch finished
+   else
+     echo "Nothing to do for $d"
+   fi
+)
+touch finished
+echo "All jobs done"
+done
+'''.format(VASP_INPUT_PREFIX)
+
+
 def make_hex_lattice_input(path, atomic_sep):
 	symbols = ['C', 'C']
 	unique_symbols = set(symbols) # for potcar
@@ -25,8 +58,8 @@ def make_hex_lattice_input(path, atomic_sep):
 	])
 
 	positions = [
-		[0.0, 0.0, 0.0],
-		[1.0, 0.0, 0.0],
+		[0.0, 0.0, 1/2],
+		[1/3, 0.0, 1/2],
 	]
 	dynamics = [
 		[True, True, False],
@@ -53,6 +86,16 @@ def make_hex_lattice_input(path, atomic_sep):
 
 	ws.write_input(path)
 
-for scale in range(138,145):
-	atomic_sep = scale * .01
-	make_hex_lattice_input('hexagonal-{:0.3f}'.format(atomic_sep), atomic_sep)
+def make_test_dir(path):
+
+	for scale in range(138,145):
+		atomic_sep = scale * .01
+
+		input_dir = os.path.join(path, '{}hexagonal-{:0.3f}'.format(VASP_INPUT_PREFIX, atomic_sep))
+
+		make_hex_lattice_input(input_dir, atomic_sep)
+
+	with open(os.path.join(path, SCRIPT_NAME),'w') as f:
+		f.write(SCRIPT_CONTENTS)
+
+make_test_dir(sys.argv[1])
