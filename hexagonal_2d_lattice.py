@@ -104,7 +104,7 @@ def hexagonal_unitcell_alt (
 
 
 '''
-def make_hex_lattice_input(path, atomic_sep, comment):
+def make_hex_lattice_input(path, atomic_sep):
 	symbols = ['C', 'C']
 	unique_symbols = set(symbols) # for potcar
 
@@ -115,7 +115,6 @@ def make_hex_lattice_input(path, atomic_sep, comment):
 		[1.5, math.sqrt(3)/2,  0.],
 		[0.0,            0.0, 20.],
 	])
-
 	# liangbo
 	lattice_liang = np.array([
 		[math.sqrt(3),    0.0,  0.],
@@ -128,18 +127,22 @@ def make_hex_lattice_input(path, atomic_sep, comment):
 	lattice[:2] = lattice[:2] * atomic_sep
 	print(lattice)
 
-    positions_lamp = [
-        [0.0, 0.0, 1/2],
-        [1/3, 0.0, 1/2],
-    ]
-    positions_liang = [
-        [0.0, 0.0, 1/2],
-        [1/3, 2/3, 1/2],
-    ]
+	positions_lamp = [
+		[0.0, 0.0, 1/2],
+		[1/3, 0.0, 1/2],
+	]
+	positions_liang = [
+		[0.0, 0.0, 1/2],
+		[1/3, 2/3, 1/2],
+	]
+
 	dynamics = [
 		[True, True, False],
 		[True, True, False],
 	]
+
+	lattice   = lattice_lamp
+	positions = positions_lamp
 
 	structure = mg.Structure(lattice, symbols, positions)
 
@@ -152,9 +155,10 @@ def make_hex_lattice_input(path, atomic_sep, comment):
 	incar['NSW']    = 1000
 	incar['IBRION'] = 2
 	incar['EDIFF']  = 1E-8
+	incar['ISYM']   = 0 # :O :O :O my worst nightmare
 	# NOTE ENCUT is in Incar.int_keys while vasp docs specify "Real"
 
-	kpoints = Kpoints.gamma_automatic([9,9,1], [0,0,0])
+	kpoints = Kpoints.gamma_automatic([12,12,1], [0,0,0])
 
 	# NOTE: if not using keyword args, it seems easy to accidentally transpose the
 	#       input parameters.  This error will not be detected, and it will cause
