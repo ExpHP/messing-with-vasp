@@ -103,6 +103,7 @@ def hexagonal_unitcell_alt (
 	return pb
 
 
+# TODO delete this old mess once I test the refactored code and am convinced it still works
 '''
 def make_hex_lattice_input(path, atomic_sep):
 	symbols = ['C', 'C']
@@ -199,8 +200,23 @@ def atomic_sep_study(path):
 	for scale in range(1380,1450):
 		atomic_sep = scale * .001
 
-		input_dir = os.path.join(path, '{}hexagonal-{:0.3f}'.format(VASP_INPUT_PREFIX, atomic_sep))
+		input_dir = os.path.join(path, '{}hexagonal_scale_{:0.3f}'.format(VASP_INPUT_PREFIX, atomic_sep))
 		comment   = 'Carbon Hexagonal Lattice, r={:0.3f}'.format(atomic_sep)
+
+		make_hex_lattice_input(input_dir, atomic_sep, kpointdivs, comment)
+
+	with open(os.path.join(path, SCRIPT_NAME),'w') as f:
+		f.write(SCRIPT_CONTENTS)
+
+def kpoint_study(path):
+
+	atomic_sep = 1.42
+
+	for i in range(1, 16 + 1):
+		kpointdivs = [i, i, 1]
+
+		input_dir = os.path.join(path, '{}hexagonal_kpoints_{:d}_{:d}_{:d}'.format(VASP_INPUT_PREFIX, *kpointdivs))
+		comment   = 'Carbon Hexagonal Lattice, kpointdivs={:d} {:d} {:d}'.format(*kpointdivs)
 
 		make_hex_lattice_input(input_dir, atomic_sep, kpointdivs, comment)
 
@@ -209,3 +225,4 @@ def atomic_sep_study(path):
 
 
 atomic_sep_study(sys.argv[1])
+#kpoint_study(sys.argv[1])
