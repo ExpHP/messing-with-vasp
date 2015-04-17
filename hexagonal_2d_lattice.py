@@ -1,6 +1,7 @@
 
 from __future__ import division
 
+import json
 import math
 import sys
 import os
@@ -184,11 +185,15 @@ def make_hex_lattice_input(path, atomic_sep, kpointdivs, comment, forbid_symmetr
 
 	kpoints = Kpoints.gamma_automatic(kpointdivs, [0,0,0])
 
+	metadata = {'atomic_sep': atomic_sep, 'kpointdivs': kpointdivs}
+
 	ws = VaspInput(
 		poscar  = pb.poscar(comment=comment),
 		potcar  = pb.potcar(functional='PBE'),
 		incar   = incar,
 		kpoints = kpoints,
+		# additional files
+		metadata = json.dumps(metadata),
 	)
 
 	ws.write_input(path)
@@ -223,6 +228,5 @@ def kpoint_study(path):
 	with open(os.path.join(path, SCRIPT_NAME),'w') as f:
 		f.write(SCRIPT_CONTENTS)
 
-
-atomic_sep_study(sys.argv[1])
-#kpoint_study(sys.argv[1])
+#atomic_sep_study(sys.argv[1])
+kpoint_study(sys.argv[1])
