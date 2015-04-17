@@ -210,7 +210,7 @@ def atomic_sep_study(path):
 
 def kpoint_study(path):
 
-	atomic_sep = 1.42
+	atomic_sep = 1.426
 
 	for i in range(1, 16 + 1):
 		kpointdivs = [i, i, 1]
