@@ -55,32 +55,29 @@ assert(np.linalg.norm(periodic_points(2.,3.,1) - np.array([2.5])) < 1E-10)
 assert(np.linalg.norm(periodic_points(2.,3.,2) - np.array([2.25, 2.75])) < 1E-10)
 
 def carbon_chain_poxcar (
-	num_atoms,       # number of links to include of the chain
-	atomicsep,       #
-	layersep = None, # separation between periodic copies on both axes
+	chain_length,    # number of links to include of the chain
+	atomic_sep,      #
+	layer_sep,       # separation between periodic copies on both axes
 	specie = 'C',
 ):
-	if layersep is None:
-		layersep = 20. * atomicsep
-
-	lattice = np.array([
-		[1.0,      0.0,      0.0],
-		[0.0, layersep,      0.0],
-		[0.0,      0.0, layersep],
+	dimensions = np.array([
+		chain_length * atomic_sep,
+		layer_sep,
+		layer_sep,
 	])
 
-	lattice[:1] *= atomicsep
+	lattice = np.eye(3) * dimensions
 
 	pb = PoxcarBuilder([specie], lattice, VelocityMode.automatic)
 
-	for x in periodic_points(0., 1., num_atoms):
-		pb.add_particle(specie, [x, 1/2, 1/2], [True, False, False])
+	for x in periodic_points(0., 1., chain_length):
+		pb.add_particle(specie, [x, 1/2, 1/2], [True, True, True])
 
 	return pb
 
-def make_vasp_input(path, chain_length, atomic_sep, kpointdivs, comment, forbid_symmetry=True):
+def make_vasp_input(path, kpointdivs, comment, forbid_symmetry, **kwargs):
 
-	pb = carbon_chain_poxcar(chain_length, atomic_sep, layersep=25.)
+	pb = carbon_chain_poxcar(**kwargs)
 
 	incar = Incar()
 	incar['SYSTEM'] = comment
@@ -93,11 +90,12 @@ def make_vasp_input(path, chain_length, atomic_sep, kpointdivs, comment, forbid_
 
 	kpoints = Kpoints.gamma_automatic(kpointdivs, [0,0,0])
 
-	metadata = {
-		'atomic_sep': atomic_sep,
-		'kpointdivs': kpointdivs,
-		'chain_length': chain_length,
-	}
+	# FIXME this is all kinds of bad
+	# It will include values we potentially don't want in the metadata, and prevents
+	#  functions from having non-stringifiable arguments.
+	# It also makes creates a dependency between the names used in the metadata file
+	#  and the names of function arguments in this code
+	metadata = dict(**kwargs)
 
 	ws = VaspInput(
 		poscar  = pb.poscar(comment=comment),
@@ -110,39 +108,25 @@ def make_vasp_input(path, chain_length, atomic_sep, kpointdivs, comment, forbid_
 
 	ws.write_input(path)
 
-def atomic_sep_study(path, chain_length, min_sep, max_sep, n):
+def make_atomic_sep_study_inputs(path, seps_to_try, **kwargs):
 
-	atomic_seps = np.linspace(min_sep, max_sep, n)
-
-	for trial_num, atomic_sep in enumerate(atomic_seps):
-
+	for trial_num, atomic_sep in enumerate(seps_to_try):
 		output_dir = os.path.join(path, '{}hexagonal_scale_{}'.format(VASP_INPUT_PREFIX, trial_num))
-
 		make_vasp_input(output_dir,
-			chain_length = chain_length,
 			atomic_sep   = atomic_sep,
-			kpointdivs   = [30, 1, 1],
-			comment      = 'Carbon Chain, Length {}, sep={:0.7f}'.format(chain_length, atomic_sep),
-			forbid_symmetry = True,
+			**kwargs
 		)
 
 	with open(os.path.join(path, SCRIPT_NAME),'w') as f:
 		f.write(SCRIPT_CONTENTS)
 
-#def kpoint_study(path):
-
-	#atomic_sep = 1.426
-
-	#for i in range(1, 16 + 1):
-		#kpointdivs = [i, 1, 1]
-
-		#output_dir = os.path.join(path, '{}hexagonal_kpoints_{:d}_{:d}_{:d}'.format(VASP_INPUT_PREFIX, *kpointdivs))
-		#comment   = 'Carbon Hexagonal Lattice, kpointdivs={:d} {:d} {:d}'.format(*kpointdivs)
-
-		#make_vasp_input(output_dir, atomic_sep, kpointdivs, comment)
-
-	#with open(os.path.join(path, SCRIPT_NAME),'w') as f:
-		#f.write(SCRIPT_CONTENTS)
-
-atomic_sep_study(sys.argv[1], 1, 1.400, 1.500, 25)
+make_atomic_sep_study_inputs(
+	path            = sys.argv[1],
+	chain_length    = 1,
+	seps_to_try     = np.linspace(1.200, 1.800, 12),
+	forbid_symmetry = False,
+	kpointdivs      = [30, 1, 1],
+	layer_sep       = 15.0,
+	comment         = 'Carbon Chain',
+)
 #kpoint_study(sys.argv[1])
