@@ -13,8 +13,11 @@ from pymatgen.io.vaspio import Potcar, Incar, Kpoints, Poscar, VaspInput
 
 from vaspy.poxcarbuilder import PoxcarBuilder, VelocityMode, Coords
 
+import argparse
+
 VASP_INPUT_PREFIX = 'vc_'
-SCRIPT_NAME = 'sbatch.me'
+TRIAL_DIR_LIST_FILENAME = 'trial_dirs'
+SCRIPT_FILENAME = 'sbatch.me'
 SCRIPT_CONTENTS = '''#!/bin/bash
 #SBATCH -n 16
 #SBATCH -N 1
@@ -25,7 +28,7 @@ echo "The Job ID is $SLURM_JOB_ID"
 source /cm/shared/apps/intel/bin/compilervars.sh intel64
 export PATH=/cm/shared/apps/mvapich2/intel/64/1.9/bin:$PATH
 
-for d in {}*; do
+for d in `cat "{}"`; do
 (
    cd $d
    if [ ! -e finished ]; then
@@ -39,7 +42,7 @@ for d in {}*; do
 done
 touch finished
 echo "All jobs done"
-'''.format(VASP_INPUT_PREFIX)
+'''.format(TRIAL_DIR_LIST_FILENAME)
 
 # Returns n equally spaced values between start and end, centered in
 #  the interval (so neither start nor end are included)
@@ -75,16 +78,20 @@ def carbon_chain_poxcar (
 
 	return pb
 
-def make_vasp_input(path, kpointdivs, comment, forbid_symmetry, **kwargs):
+def make_vasp_input(path, kpointdivs, comment, forbid_symmetry, perturb_dist, **kwargs):
 
 	pb = carbon_chain_poxcar(**kwargs)
+
+	pb.structure.perturb(perturb_dist)
 
 	incar = Incar()
 	incar['SYSTEM'] = comment
 	incar['ALGO']   = 'Fast'
 	incar['NSW']    = 1000
+	incar['NPAR']   = 4
 	incar['IBRION'] = 2
 	incar['EDIFF']  = 1E-8
+	incar['EDIFFG'] = -0.001
 	if forbid_symmetry:
 		incar['ISYM'] = 0
 
@@ -108,25 +115,95 @@ def make_vasp_input(path, kpointdivs, comment, forbid_symmetry, **kwargs):
 
 	ws.write_input(path)
 
+def make_study_special_files(path, output_dirs):
+	# File containing script for running VASP on all of the trials
+	with open(os.path.join(path, SCRIPT_FILENAME),'w') as f:
+		f.write(SCRIPT_CONTENTS)
+
+	# File containing list of trial directories, one per line
+	with open(os.path.join(path, TRIAL_DIR_LIST_FILENAME), 'w') as f:
+		f.write('\n'.join(output_dirs))
+		f.write('\n')
+
+
 def make_atomic_sep_study_inputs(path, seps_to_try, **kwargs):
 
+	output_dirs = []
+
 	for trial_num, atomic_sep in enumerate(seps_to_try):
-		output_dir = os.path.join(path, '{}hexagonal_scale_{}'.format(VASP_INPUT_PREFIX, trial_num))
+		output_dir = os.path.join(path, 'trial_{}'.format(trial_num))
 		make_vasp_input(output_dir,
 			atomic_sep   = atomic_sep,
 			**kwargs
 		)
 
-	with open(os.path.join(path, SCRIPT_NAME),'w') as f:
-		f.write(SCRIPT_CONTENTS)
+		output_dirs.append(os.path.abspath(output_dir))
 
-make_atomic_sep_study_inputs(
-	path            = sys.argv[1],
-	chain_length    = 1,
-	seps_to_try     = np.linspace(1.200, 1.800, 12),
-	forbid_symmetry = False,
-	kpointdivs      = [30, 1, 1],
-	layer_sep       = 15.0,
-	comment         = 'Carbon Chain',
-)
-#kpoint_study(sys.argv[1])
+	make_study_special_files(path, output_dirs)
+
+def make_atomic_sep_study_inputs(path, seps_to_try, **kwargs):
+
+	output_dirs = []
+
+	for trial_num, atomic_sep in enumerate(seps_to_try):
+		output_dir = os.path.join(path, 'trial_{}'.format(trial_num))
+		make_vasp_input(output_dir,
+			atomic_sep   = atomic_sep,
+			**kwargs
+		)
+
+		output_dirs.append(os.path.abspath(output_dir))
+
+	make_study_special_files(path, output_dirs)
+
+# arguments shared by all studies
+def get_shared_study_args(args):
+	return {
+		'path':            args.outdir,
+		'poxcar_gen':      carbon_chain_poxcar,
+		'perturb_dist':    0.0,
+		'chain_length':    args.n_atoms,
+		'layer_sep':       15.0,
+		'forbid_symmetry': False,
+		'comment':         'Carbon Chain',
+	}
+
+parser = argparse.ArgumentParser()
+parser.add_argument('n_atoms', type=int)
+
+subparsers = argparser.add_subparsers(help='available studies')
+
+#-------------------------------------------------------------------------
+scale_parser = subparsers.add_parser('scale')
+scale_parser.add_argument('outdir', type=str)
+scale_parser.add_argument('start',  type=float)
+scale_parser.add_argument('stop',   type=float)
+scale_parser.add_argument('nsteps', type=int)
+scale_parser.add_argument('--kpoints', nargs=3, type=int, required=True)
+
+def handle_scale_mode(args):
+	make_atomic_sep_study_inputs(
+		seps_to_try = np.linspace(args.start, args.stop, args.nsteps),
+		kpointdivs  = args.kpoints,
+		**get_shared_study_args(args)
+	)
+
+scale_parser.set_defaults(func=handle_scale_mode)
+#-------------------------------------------------------------------------
+kpoints_parser = subparsers.add_parser('kpoints')
+kpoints_parser.add_argument('outdir', type=str)
+kpoints_parser.add_argument('--scale', nargs=1, type=float, required=True)
+
+def handle_kpoints_mode(args):
+	make_kpoints_study_inputs(
+		atomic_sep  = args.scale,
+		divs_to_try = [[i, 1, 1] for i in range(5,100,5)],
+		**get_shared_study_args(args)
+	)
+
+kpoints_parser.set_defaults(func=handle_kpoints_mode)
+#-------------------------------------------------------------------------
+
+
+args = parser.parse_args(sys.argv)
+args.func(args)
