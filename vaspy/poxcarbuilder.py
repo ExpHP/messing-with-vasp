@@ -155,23 +155,6 @@ class PoxcarBuilder:
 #		if self.has_velocity():
 #			self._velocities[species].extend(vs)
 
-	# TODO: Fix comment
-	# TODO: The reason that these methods are the only available accessors is to force the client to iterate
-	#        over .species(). (this is the easiest way to guarantee everything is ordered consistently)
-	#
-	#       I should investigate whether this is still necessary, now that I am aware that VASP allows species
-	#        names to be provided at various places in the POSCAR.
-#	def species_positions(self, species):
-#		return list(self._positions[species])
-#
-#	def species_dynamics(self, species):
-#		return list(self._dynamics[species])
-#
-#	def species_velocities(self, species):
-#		if not self.has_velocity():
-#			raise RuntimeError("called species_velocities on a ParticleList that doesn't have velocity")
-#		return list(self._velocities[species])
-
 	def _unique_species_list(self):
 		return list(self.species())
 
