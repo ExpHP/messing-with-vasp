@@ -15,7 +15,6 @@ from vaspy.poxcarbuilder import PoxcarBuilder, VelocityMode, Coords
 
 import argparse
 
-VASP_INPUT_PREFIX = 'vc_'
 TRIAL_DIR_LIST_FILENAME = 'trial_dirs'
 SCRIPT_FILENAME = 'sbatch.me'
 SCRIPT_CONTENTS = '''#!/bin/bash
@@ -46,7 +45,7 @@ echo "All jobs done"
 
 # Returns n equally spaced values between start and end, centered in
 #  the interval (so neither start nor end are included)
-def periodic_points (start, end, n):
+def periodic_points(start, end, n):
 	res = np.linspace(start, end, n+1)
 
 	# The interval above includes start; we want it centered
@@ -67,7 +66,7 @@ def carbon_chain_poxcar (
 		chain_length * atomic_sep,
 		layer_sep,
 		layer_sep,
-	])
+	], dtype=float)
 
 	lattice = np.eye(3) * dimensions
 
@@ -78,11 +77,9 @@ def carbon_chain_poxcar (
 
 	return pb
 
-def make_vasp_input(path, kpointdivs, comment, forbid_symmetry, perturb_dist, **kwargs):
+def make_vasp_input(path, *, kpointdivs, comment, forbid_symmetry, functional, perturb_dist, **kwargs):
 
 	pb = carbon_chain_poxcar(**kwargs)
-
-	pb.structure.perturb(perturb_dist)
 
 	incar = Incar()
 	incar['SYSTEM'] = comment
@@ -105,10 +102,16 @@ def make_vasp_input(path, kpointdivs, comment, forbid_symmetry, perturb_dist, **
 	metadata = dict(**kwargs)
 
 	ws = VaspInput(
-		poscar  = pb.poscar(comment=comment),
-		potcar  = pb.potcar(functional='PBE'),
-		incar   = incar,
+		poscar = pb.poscar(
+			perturb_dist=perturb_dist,
+			comment=comment,
+		),
+		potcar = pb.potcar(
+			functional=functional,
+		),
+		incar = incar,
 		kpoints = kpoints,
+
 		# additional files
 		metadata = json.dumps(metadata),
 	)
@@ -116,7 +119,7 @@ def make_vasp_input(path, kpointdivs, comment, forbid_symmetry, perturb_dist, **
 	ws.write_input(path)
 
 def make_study_special_files(path, output_dirs):
-	# File containing script for running VASP on all of the trials
+	# Script for running VASP on all of the trials
 	with open(os.path.join(path, SCRIPT_FILENAME),'w') as f:
 		f.write(SCRIPT_CONTENTS)
 
@@ -126,14 +129,14 @@ def make_study_special_files(path, output_dirs):
 		f.write('\n')
 
 
-def make_atomic_sep_study_inputs(path, seps_to_try, **kwargs):
+def make_scale_study_inputs(path, seps_to_try, **kwargs):
 
 	output_dirs = []
 
 	for trial_num, atomic_sep in enumerate(seps_to_try):
 		output_dir = os.path.join(path, 'trial_{}'.format(trial_num))
 		make_vasp_input(output_dir,
-			atomic_sep   = atomic_sep,
+			atomic_sep=atomic_sep,
 			**kwargs
 		)
 
@@ -141,14 +144,14 @@ def make_atomic_sep_study_inputs(path, seps_to_try, **kwargs):
 
 	make_study_special_files(path, output_dirs)
 
-def make_atomic_sep_study_inputs(path, seps_to_try, **kwargs):
+def make_kpoints_study_inputs(path, divs_to_try, **kwargs):
 
 	output_dirs = []
 
-	for trial_num, atomic_sep in enumerate(seps_to_try):
+	for trial_num, kpointdivs in enumerate(divs_to_try):
 		output_dir = os.path.join(path, 'trial_{}'.format(trial_num))
 		make_vasp_input(output_dir,
-			atomic_sep   = atomic_sep,
+			kpointdivs=kpointdivs,
 			**kwargs
 		)
 
@@ -160,18 +163,18 @@ def make_atomic_sep_study_inputs(path, seps_to_try, **kwargs):
 def get_shared_study_args(args):
 	return {
 		'path':            args.outdir,
-		'poxcar_gen':      carbon_chain_poxcar,
-		'perturb_dist':    0.0,
+		'perturb_dist':    0.2,
 		'chain_length':    args.n_atoms,
 		'layer_sep':       15.0,
 		'forbid_symmetry': False,
+		'functional':      'PBE',
 		'comment':         'Carbon Chain',
 	}
 
 parser = argparse.ArgumentParser()
 parser.add_argument('n_atoms', type=int)
 
-subparsers = argparser.add_subparsers(help='available studies')
+subparsers = parser.add_subparsers(help='available studies')
 
 #-------------------------------------------------------------------------
 scale_parser = subparsers.add_parser('scale')
@@ -179,20 +182,20 @@ scale_parser.add_argument('outdir', type=str)
 scale_parser.add_argument('start',  type=float)
 scale_parser.add_argument('stop',   type=float)
 scale_parser.add_argument('nsteps', type=int)
-scale_parser.add_argument('--kpoints', nargs=3, type=int, required=True)
+scale_parser.add_argument('--kpoints', nargs=3, type=int, required=True, metavar=('KX','KY','KZ'))
 
 def handle_scale_mode(args):
-	make_atomic_sep_study_inputs(
+	make_scale_study_inputs(
 		seps_to_try = np.linspace(args.start, args.stop, args.nsteps),
 		kpointdivs  = args.kpoints,
 		**get_shared_study_args(args)
 	)
 
-scale_parser.set_defaults(func=handle_scale_mode)
+scale_parser.set_defaults(func = handle_scale_mode)
 #-------------------------------------------------------------------------
 kpoints_parser = subparsers.add_parser('kpoints')
 kpoints_parser.add_argument('outdir', type=str)
-kpoints_parser.add_argument('--scale', nargs=1, type=float, required=True)
+kpoints_parser.add_argument('--scale', type=float, required=True)
 
 def handle_kpoints_mode(args):
 	make_kpoints_study_inputs(
@@ -201,9 +204,12 @@ def handle_kpoints_mode(args):
 		**get_shared_study_args(args)
 	)
 
-kpoints_parser.set_defaults(func=handle_kpoints_mode)
+kpoints_parser.set_defaults(func = handle_kpoints_mode)
 #-------------------------------------------------------------------------
 
+args = parser.parse_args(sys.argv[1:])
 
-args = parser.parse_args(sys.argv)
+# Begin processing for the 'mode' specified by the user.
+# (this unusual looking technique is detailed in the argparse docs;
+#  'func' is a fake argument supplied by each subparser, which contains a callback)
 args.func(args)

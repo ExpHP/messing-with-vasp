@@ -206,19 +206,23 @@ class PoxcarBuilder:
 	# Output methods
 
 	# TODO: Consider:  Worth forwarding **kwargs to Poscar/Potcar constructor?
-	def poscar(self, comment='Automatically generated POSCAR'):
+	def poscar(self, perturb_dist=0.0, comment='Automatically generated POSCAR'):
 		structure = mg.Structure(
 			self._lattice,
 			self._site_species_list(),
 			self._site_position_list(),
 		)
 
-		return mg.io.vaspio.Poscar(
+		poscar = mg.io.vaspio.Poscar(
 			structure,
 			comment,
 			selective_dynamics = self._site_dynamics_list(),
 			velocities = self._site_velocity_list() if self.has_velocity() else None,
 		)
+
+		poscar.structure.perturb(perturb_dist)
+
+		return poscar
 
 	def potcar(self, functional):
 		return mg.io.vaspio.Potcar(
