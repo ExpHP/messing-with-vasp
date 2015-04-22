@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+
+import pymatgen as mg
+import json
+
+import os
+import sys
+
+def extract_final_energy(trialdir):
+	oszicar_path = os.path.join(trialdir, 'OSZICAR')
+	oszicar = mg.io.vaspio.Oszicar(oszicar_path)
+
+	# Float conversion is to remove unit
+	return float(oszicar.final_energy)
+
+def extract_scale(trialdir):
+	metadata_path = os.path.join(trialdir, 'metadata')
+
+	with open(metadata_path) as f:
+		meta = json.loads(f.read())
+
+	return meta['atomic_sep']
+
+EXTRACT_FUNCS = {
+	'scale': extract_scale,
+	'e0': extract_final_energy,
+}
+
+def extract(trialdir, names):
+	result = []
+	for name in names:
+		if name in EXTRACT_FUNCS:
+			func = EXTRACT_FUNCS[name]
+			result.append(func(trialdir))
+		else:
+			raise ValueError('"{}" is not an available property')
+	return result
+
+def get_trial_dirs(d):
+	listpath = os.path.join(d, 'trial_dirs')
+	with open(listpath) as f:
+		result = [s.strip() for s in f.readlines()]
+	return result
+
+if len(sys.argv) < 2:
+	print("usage: {}  STUDY_DIR  COLUMN [COLUMN ...]")
+	sys.exit(1)
+
+arg_where = sys.argv[1]
+arg_columns = sys.argv[2:]
+
+for trialdir in get_trial_dirs(arg_where):
+	# note: will contain data of heterogenous types
+	trial_data = extract(trialdir, arg_columns)
+	print(*[str(x) for x in trial_data])
