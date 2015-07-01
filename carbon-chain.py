@@ -77,6 +77,20 @@ def carbon_chain_poxcar (
 
 	return pb
 
+# Fail-fast alternative to dict.update.
+# Combines two dicts, throwing an error if any keys are shared.
+def dict_union(d1, d2):
+	shared_keys = set(d1) & set(d2)
+	if len(shared_keys) != 0:
+		key = shared_keys.pop()
+		msg = 'duplicate key {} (values: {} vs {})'.format(repr(key), repr(d1[key]), repr(d2[key]))
+		msg += '' if len(shared_keys) == 0 else ' (and {} more)'.format(len(shared_keys))
+		raise ValueError(msg)
+
+	result = dict(d1)
+	result.update(d2)
+	return result
+
 def make_vasp_input(path, *, kpointdivs, comment, forbid_symmetry, functional, perturb_dist, **kwargs):
 
 	pb = carbon_chain_poxcar(**kwargs)
@@ -94,12 +108,23 @@ def make_vasp_input(path, *, kpointdivs, comment, forbid_symmetry, functional, p
 
 	kpoints = Kpoints.gamma_automatic(kpointdivs, [0,0,0])
 
-	# FIXME this is all kinds of bad
-	# It will include values we potentially don't want in the metadata, and prevents
-	#  functions from having non-stringifiable arguments.
-	# It also makes creates a dependency between the names used in the metadata file
-	#  and the names of function arguments in this code
-	metadata = dict(**kwargs)
+	metadata = {
+		'kpointdivs':kpointdivs,
+		'functional':functional,
+		'perturb_dist':perturb_dist,
+		'forbid_symmetry':forbid_symmetry,
+	}
+
+	# FIXME FIXME FIXME
+	# Here, we insert all structure parameters into the metadata.  The purpose is because
+	#  oftentimes those parameters are the ones we're most interested in (such as scale).
+	#
+	# However, this is all kinds of bad:
+	#  * Not all structure arguments are necessarily desirable to have in the metadata.
+	#  * What if we want a structure argument to be of a non JSON-encodable type?
+	#  * It creates a dependency between names of function arguments in code, and the output file.
+	# In other words, madness.
+	metadata = dict_union(metadata, kwargs)
 
 	ws = VaspInput(
 		poscar = pb.poscar(
@@ -212,4 +237,9 @@ args = parser.parse_args(sys.argv[1:])
 # Begin processing for the 'mode' specified by the user.
 # (this unusual looking technique is detailed in the argparse docs;
 #  'func' is a fake argument supplied by each subparser, which contains a callback)
-args.func(args)
+if hasattr(args, 'func'): # workaround for Python 3.3+: http://bugs.python.org/issue16308
+	args.func(args)
+else:
+	parser.print_usage(file=sys.stderr)
+	print('Error: No mode specified', file=sys.stderr)
+	sys.exit(1)
