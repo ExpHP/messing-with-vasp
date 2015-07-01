@@ -7,6 +7,20 @@ import json
 import os
 import sys
 
+def main(argv):
+	from argparse import ArgumentParser
+
+	parser = ArgumentParser(argv[0])
+	parser.add_argument('study_dir', type=str)
+	parser.add_argument('columns', type=str, nargs='+', choices=sorted(EXTRACT_FUNCS))
+
+	args = parser.parse_args(argv[1:])
+
+	for trialdir in get_trial_dirs(args.study_dir):
+		# note: will contain data of heterogenous types
+		trial_data = extract(trialdir, args.columns)
+		print(*[str(x) for x in trial_data])
+
 #-----------------------------------------------------
 
 def get_metadata_dict(trialdir):
@@ -33,8 +47,6 @@ def extract_scale(trialdir):
 	meta = get_metadata_dict(trialdir)
 	return meta['atomic_sep']
 
-#-----------------------------------------------------
-
 EXTRACT_FUNCS = {
 	'name': lambda trialdir: os.path.split(trialdir)[1],
 	'ka': partial(extract_kpointdiv, idx=0),
@@ -43,6 +55,8 @@ EXTRACT_FUNCS = {
 	'scale': extract_scale,
 	'e0': extract_final_energy,
 }
+
+#-----------------------------------------------------
 
 def extract(trialdir, names):
 	result = []
@@ -60,14 +74,6 @@ def get_trial_dirs(d):
 		result = [s.strip() for s in f.readlines()]
 	return result
 
-if len(sys.argv) < 2:
-	print("usage: {}  STUDY_DIR  COLUMN [COLUMN ...]".format(sys.argv[0]))
-	sys.exit(1)
+if __name__ == '__main__':
+	main(sys.argv)
 
-arg_where = sys.argv[1]
-arg_columns = sys.argv[2:]
-
-for trialdir in get_trial_dirs(arg_where):
-	# note: will contain data of heterogenous types
-	trial_data = extract(trialdir, arg_columns)
-	print(*[str(x) for x in trial_data])
