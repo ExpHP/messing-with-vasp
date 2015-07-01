@@ -48,13 +48,12 @@ def main(argv):
 	parser.add_argument('n_atoms', type=int)
 
 	add_subparsers(parser)
-
 	args = parser.parse_args(sys.argv[1:])
 
-	# Begin processing for the 'mode' specified by the user.
-	# (this unusual looking technique is detailed in the argparse docs;
-	#  'func' is a fake argument supplied by each subparser, which contains a callback)
 	if hasattr(args, 'func'): # workaround for Python 3.3+: http://bugs.python.org/issue16308
+		# Begin processing for the 'mode' specified by the user.
+		# (this unusual looking technique is detailed in the argparse docs;
+		#  'func' is a fake argument supplied by each subparser, which contains a callback)
 		args.func(args)
 	else:
 		parser.print_usage(file=sys.stderr)
@@ -110,19 +109,6 @@ def get_shared_study_args(args):
 
 #-------------------------------------------------------------------------
 
-# Returns n equally spaced values between start and end, centered in
-#  the interval (so neither start nor end are included)
-def periodic_points(start, end, n):
-	res = np.linspace(start, end, n+1)
-
-	# The interval above includes start; we want it centered
-	offset = (end - start) / (2*(n))
-	return res[:-1] + offset
-
-# go go gadget "you call this unit testing?"
-assert(np.linalg.norm(periodic_points(2.,3.,1) - np.array([2.5])) < 1E-10)
-assert(np.linalg.norm(periodic_points(2.,3.,2) - np.array([2.25, 2.75])) < 1E-10)
-
 def carbon_chain_poxcar (
 	chain_length,    # number of links to include of the chain
 	atomic_sep,      #
@@ -144,19 +130,35 @@ def carbon_chain_poxcar (
 
 	return pb
 
-# Fail-fast alternative to dict.update.
-# Combines two dicts, throwing an error if any keys are shared.
-def dict_union(d1, d2):
-	shared_keys = set(d1) & set(d2)
-	if len(shared_keys) != 0:
-		key = shared_keys.pop()
-		msg = 'duplicate key {} (values: {} vs {})'.format(repr(key), repr(d1[key]), repr(d2[key]))
-		msg += '' if len(shared_keys) == 0 else ' (and {} more)'.format(len(shared_keys))
-		raise ValueError(msg)
+#-------------------------------------------------------------------------
 
-	result = dict(d1)
-	result.update(d2)
-	return result
+# makes a study where an argument to make_vasp_input is varied
+def make_study_inputs(path, argname, values, **kwargs):
+
+	output_dirs = []
+
+	# Trials
+	for trial_num, value in enumerate(values):
+		output_dir = os.path.join(path, 'trial_{}'.format(trial_num))
+		output_dirs.append(os.path.abspath(output_dir))
+
+		kwargs[argname] = value # vary the argument
+		make_vasp_input(output_dir, **kwargs)
+
+	# Script for running VASP on all of the trials
+	with open(os.path.join(path, SCRIPT_FILENAME),'w') as f:
+		f.write(SCRIPT_CONTENTS)
+
+	# File containing list of trial directories
+	with open(os.path.join(path, TRIAL_DIR_LIST_FILENAME), 'w') as f:
+		f.write('\n'.join(output_dirs))
+		f.write('\n')
+
+def make_scale_study_inputs(path, seps_to_try, **kwargs):
+	make_study_inputs(path, 'atomic_sep', seps_to_try, **kwargs)
+
+def make_kpoints_study_inputs(path, divs_to_try, **kwargs):
+	make_study_inputs(path, 'kpointdivs', divs_to_try, **kwargs)
 
 def make_vasp_input(path, *, kpointdivs, comment, forbid_symmetry, functional, perturb_dist, **kwargs):
 
@@ -210,45 +212,37 @@ def make_vasp_input(path, *, kpointdivs, comment, forbid_symmetry, functional, p
 
 	ws.write_input(path)
 
-def make_study_special_files(path, output_dirs):
-	# Script for running VASP on all of the trials
-	with open(os.path.join(path, SCRIPT_FILENAME),'w') as f:
-		f.write(SCRIPT_CONTENTS)
+#-------------------------------------------------------------------------
 
-	# File containing list of trial directories, one per line
-	with open(os.path.join(path, TRIAL_DIR_LIST_FILENAME), 'w') as f:
-		f.write('\n'.join(output_dirs))
-		f.write('\n')
+# Returns n equally spaced values between start and end, centered in
+#  the interval (so neither start nor end are included)
+def periodic_points(start, end, n):
+	res = np.linspace(start, end, n+1)
 
-def make_scale_study_inputs(path, seps_to_try, **kwargs):
+	# The interval above includes start; we want it centered
+	offset = (end - start) / (2*(n))
+	return res[:-1] + offset
 
-	output_dirs = []
+# go go gadget "you call this unit testing?"
+assert(np.linalg.norm(periodic_points(2.,3.,1) - np.array([2.5])) < 1E-10)
+assert(np.linalg.norm(periodic_points(2.,3.,2) - np.array([2.25, 2.75])) < 1E-10)
 
-	for trial_num, atomic_sep in enumerate(seps_to_try):
-		output_dir = os.path.join(path, 'trial_{}'.format(trial_num))
-		make_vasp_input(output_dir,
-			atomic_sep=atomic_sep,
-			**kwargs
-		)
 
-		output_dirs.append(os.path.abspath(output_dir))
+# Fail-fast alternative to dict.update.
+# Combines two dicts, throwing an error if any keys are shared.
+def dict_union(d1, d2):
+	shared_keys = set(d1) & set(d2)
+	if len(shared_keys) != 0:
+		key = shared_keys.pop()
+		msg = 'duplicate key {} (values: {} vs {})'.format(repr(key), repr(d1[key]), repr(d2[key]))
+		msg += '' if len(shared_keys) == 0 else ' (and {} more)'.format(len(shared_keys))
+		raise ValueError(msg)
 
-	make_study_special_files(path, output_dirs)
+	result = dict(d1)
+	result.update(d2)
+	return result
 
-def make_kpoints_study_inputs(path, divs_to_try, **kwargs):
-
-	output_dirs = []
-
-	for trial_num, kpointdivs in enumerate(divs_to_try):
-		output_dir = os.path.join(path, 'trial_{}'.format(trial_num))
-		make_vasp_input(output_dir,
-			kpointdivs=kpointdivs,
-			**kwargs
-		)
-
-		output_dirs.append(os.path.abspath(output_dir))
-
-	make_study_special_files(path, output_dirs)
+#-------------------------------------------------------------------------
 
 if __name__ == '__main__':
 	main(sys.argv)
