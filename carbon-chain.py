@@ -72,12 +72,12 @@ def add_scale_subparser(subparsers, command):
 	sub.add_argument('start',  type=float)
 	sub.add_argument('stop',   type=float)
 	sub.add_argument('nsteps', type=int)
-	sub.add_argument('--kpoints', nargs=3, type=int, required=True, metavar=('KX','KY','KZ'))
+	sub.add_argument('--kpoints', type=int, required=True, metavar='KZ')
 
 	def callback(args):
 		make_scale_study_inputs(
 			seps_to_try = np.linspace(args.start, args.stop, args.nsteps),
-			kpointdivs  = args.kpoints,
+			kpointdivs  = [1, 1, args.kpoints],
 			**get_shared_study_args(args)
 		)
 	sub.set_defaults(func = callback)
@@ -90,7 +90,7 @@ def add_kpoints_subparser(subparsers, command):
 	def callback(args):
 		make_kpoints_study_inputs(
 			atomic_sep  = args.scale,
-			divs_to_try = [[i, 1, 1] for i in range(5,100,5)],
+			divs_to_try = [[1, 1, x] for x in range(5,100,5)],
 			**get_shared_study_args(args)
 		)
 	sub.set_defaults(func = callback)
@@ -116,9 +116,9 @@ def carbon_chain_poxcar (
 	specie = 'C',
 ):
 	dimensions = np.array([
+		layer_sep,
+		layer_sep,
 		chain_length * atomic_sep,
-		layer_sep,
-		layer_sep,
 	], dtype=float)
 
 	lattice = np.eye(3) * dimensions
@@ -126,7 +126,7 @@ def carbon_chain_poxcar (
 	pb = PoxcarBuilder([specie], lattice, VelocityMode.automatic)
 
 	for x in periodic_points(0., 1., chain_length):
-		pb.add_particle(specie, [x, 1/2, 1/2], [True, True, True])
+		pb.add_particle(specie, [1/2, 1/2, x], [True, True, True])
 
 	return pb
 
@@ -161,6 +161,10 @@ def make_kpoints_study_inputs(path, divs_to_try, **kwargs):
 	make_study_inputs(path, 'kpointdivs', divs_to_try, **kwargs)
 
 def make_vasp_input(path, *, kpointdivs, comment, forbid_symmetry, functional, perturb_dist, **kwargs):
+	assert hasattr(kpointdivs, '__iter__')
+	assert isinstance(comment, str)
+	assert isinstance(forbid_symmetry, bool)
+	assert isinstance(perturb_dist, float)
 
 	pb = carbon_chain_poxcar(**kwargs)
 
