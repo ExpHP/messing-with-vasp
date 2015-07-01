@@ -43,6 +43,73 @@ touch finished
 echo "All jobs done"
 '''.format(TRIAL_DIR_LIST_FILENAME)
 
+def main(argv):
+	parser = argparse.ArgumentParser()
+	parser.add_argument('n_atoms', type=int)
+
+	add_subparsers(parser)
+
+	args = parser.parse_args(sys.argv[1:])
+
+	# Begin processing for the 'mode' specified by the user.
+	# (this unusual looking technique is detailed in the argparse docs;
+	#  'func' is a fake argument supplied by each subparser, which contains a callback)
+	if hasattr(args, 'func'): # workaround for Python 3.3+: http://bugs.python.org/issue16308
+		args.func(args)
+	else:
+		parser.print_usage(file=sys.stderr)
+		print('Error: No mode specified', file=sys.stderr)
+		sys.exit(1)
+
+def add_subparsers(parser):
+	subparsers = parser.add_subparsers(help='available studies')
+
+	add_scale_subparser(subparsers, 'scale')
+	add_kpoints_subparser(subparsers, 'kpoints')
+
+def add_scale_subparser(subparsers, command):
+	sub = subparsers.add_parser(command)
+	sub.add_argument('outdir', type=str)
+	sub.add_argument('start',  type=float)
+	sub.add_argument('stop',   type=float)
+	sub.add_argument('nsteps', type=int)
+	sub.add_argument('--kpoints', nargs=3, type=int, required=True, metavar=('KX','KY','KZ'))
+
+	def callback(args):
+		make_scale_study_inputs(
+			seps_to_try = np.linspace(args.start, args.stop, args.nsteps),
+			kpointdivs  = args.kpoints,
+			**get_shared_study_args(args)
+		)
+	sub.set_defaults(func = callback)
+
+def add_kpoints_subparser(subparsers, command):
+	sub = subparsers.add_parser(command)
+	sub.add_argument('outdir', type=str)
+	sub.add_argument('--scale', type=float, required=True)
+
+	def callback(args):
+		make_kpoints_study_inputs(
+			atomic_sep  = args.scale,
+			divs_to_try = [[i, 1, 1] for i in range(5,100,5)],
+			**get_shared_study_args(args)
+		)
+	sub.set_defaults(func = callback)
+
+# arguments shared by all studies
+def get_shared_study_args(args):
+	return {
+		'path':            args.outdir,
+		'perturb_dist':    0.2,
+		'chain_length':    args.n_atoms,
+		'layer_sep':       15.0,
+		'forbid_symmetry': False,
+		'functional':      'PBE',
+		'comment':         'Carbon Chain',
+	}
+
+#-------------------------------------------------------------------------
+
 # Returns n equally spaced values between start and end, centered in
 #  the interval (so neither start nor end are included)
 def periodic_points(start, end, n):
@@ -153,7 +220,6 @@ def make_study_special_files(path, output_dirs):
 		f.write('\n'.join(output_dirs))
 		f.write('\n')
 
-
 def make_scale_study_inputs(path, seps_to_try, **kwargs):
 
 	output_dirs = []
@@ -184,62 +250,6 @@ def make_kpoints_study_inputs(path, divs_to_try, **kwargs):
 
 	make_study_special_files(path, output_dirs)
 
-# arguments shared by all studies
-def get_shared_study_args(args):
-	return {
-		'path':            args.outdir,
-		'perturb_dist':    0.2,
-		'chain_length':    args.n_atoms,
-		'layer_sep':       15.0,
-		'forbid_symmetry': False,
-		'functional':      'PBE',
-		'comment':         'Carbon Chain',
-	}
+if __name__ == '__main__':
+	main(sys.argv)
 
-parser = argparse.ArgumentParser()
-parser.add_argument('n_atoms', type=int)
-
-subparsers = parser.add_subparsers(help='available studies')
-
-#-------------------------------------------------------------------------
-scale_parser = subparsers.add_parser('scale')
-scale_parser.add_argument('outdir', type=str)
-scale_parser.add_argument('start',  type=float)
-scale_parser.add_argument('stop',   type=float)
-scale_parser.add_argument('nsteps', type=int)
-scale_parser.add_argument('--kpoints', nargs=3, type=int, required=True, metavar=('KX','KY','KZ'))
-
-def handle_scale_mode(args):
-	make_scale_study_inputs(
-		seps_to_try = np.linspace(args.start, args.stop, args.nsteps),
-		kpointdivs  = args.kpoints,
-		**get_shared_study_args(args)
-	)
-
-scale_parser.set_defaults(func = handle_scale_mode)
-#-------------------------------------------------------------------------
-kpoints_parser = subparsers.add_parser('kpoints')
-kpoints_parser.add_argument('outdir', type=str)
-kpoints_parser.add_argument('--scale', type=float, required=True)
-
-def handle_kpoints_mode(args):
-	make_kpoints_study_inputs(
-		atomic_sep  = args.scale,
-		divs_to_try = [[i, 1, 1] for i in range(5,100,5)],
-		**get_shared_study_args(args)
-	)
-
-kpoints_parser.set_defaults(func = handle_kpoints_mode)
-#-------------------------------------------------------------------------
-
-args = parser.parse_args(sys.argv[1:])
-
-# Begin processing for the 'mode' specified by the user.
-# (this unusual looking technique is detailed in the argparse docs;
-#  'func' is a fake argument supplied by each subparser, which contains a callback)
-if hasattr(args, 'func'): # workaround for Python 3.3+: http://bugs.python.org/issue16308
-	args.func(args)
-else:
-	parser.print_usage(file=sys.stderr)
-	print('Error: No mode specified', file=sys.stderr)
-	sys.exit(1)
